@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>注册 Webhook</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #111111;
+        --panel: #1d1d1f;
+        --text: #f5f5f7;
+        --muted: #a7a7ad;
+        --line: #36363a;
+        --accent: #9b6cff;
+        --ok: #49d6a6;
+        --bad: #ff6b6b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      main {
+        width: min(100vw - 28px, 680px);
+        margin: 0 auto;
+        padding: 28px 0;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 30px;
+        letter-spacing: 0;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .panel {
+        margin-top: 20px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #121214;
+        color: var(--text);
+        font: inherit;
+      }
+
+      input {
+        min-height: 44px;
+        padding: 0 12px;
+      }
+
+      textarea {
+        min-height: 112px;
+        padding: 12px;
+        resize: vertical;
+      }
+
+      button {
+        width: 100%;
+        min-height: 48px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: white;
+        font: inherit;
+        font-weight: 700;
+      }
+
+      .status {
+        margin-top: 14px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--muted);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .status.ok {
+        border-color: rgba(73, 214, 166, 0.5);
+        color: var(--ok);
+      }
+
+      .status.bad {
+        border-color: rgba(255, 107, 107, 0.5);
+        color: var(--bad);
+      }
+
+      .hint {
+        margin-top: 14px;
+        font-size: 13px;
+      }
+
+      code {
+        color: var(--ok);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>注册 Webhook</h1>
+      <p>保持 Android SMS Gateway 的本地服务器在线，然后在这里填手机 App 首页显示的账号密码。</p>
+
+      <section class="panel">
+        <label>
+          手机 API 地址
+          <input id="phoneApi" value="http://127.0.0.1:8080" />
+        </label>
+
+        <label>
+          用户名
+          <input id="phoneUser" value="sms" autocomplete="username" />
+        </label>
+
+        <label>
+          密码
+          <input id="phonePass" type="password" autocomplete="current-password" />
+        </label>
+
+        <label>
+          设备 ID（多设备时填写）
+          <input id="deviceId" placeholder="可留空" autocomplete="off" />
+        </label>
+
+        <label>
+          将注册到手机的 Webhook
+          <textarea id="payload" readonly></textarea>
+        </label>
+
+        <button id="registerBtn" type="button">注册到手机</button>
+        <div id="status" class="status">等待填写密码。</div>
+
+        <p class="hint">
+          公网部署必须使用 HTTPS，并在手机 App 的 Webhook 设置中配置与服务器一致的签名密钥。
+        </p>
+      </section>
+    </main>
+
+    <script>
+      const els = {
+        phoneApi: document.querySelector("#phoneApi"),
+        phoneUser: document.querySelector("#phoneUser"),
+        phonePass: document.querySelector("#phonePass"),
+        deviceId: document.querySelector("#deviceId"),
+        payload: document.querySelector("#payload"),
+        registerBtn: document.querySelector("#registerBtn"),
+        status: document.querySelector("#status"),
+      };
+
+      let registerInfo = null;
+
+      function dashboardBasePath() {
+        return window.location.pathname.replace(/\/register\/?$/, "");
+      }
+
+      function setStatus(message, kind = "") {
+        els.status.className = kind ? `status ${kind}` : "status";
+        els.status.textContent = message;
+      }
+
+      async function loadRegisterInfo() {
+        const response = await fetch(`${window.location.origin}${dashboardBasePath()}/api/register-info`, {
+          cache: "no-store",
+        });
+        registerInfo = await response.json();
+        els.payload.value = JSON.stringify(registerInfo.webhookBody, null, 2);
+      }
+
+      async function registerWebhook() {
+        if (!registerInfo) {
+          await loadRegisterInfo();
+        }
+
+        const phoneApi = els.phoneApi.value.trim().replace(/\/$/, "");
+        const user = els.phoneUser.value.trim();
+        const pass = els.phonePass.value;
+        const deviceId = els.deviceId.value.trim();
+        if (!phoneApi || !user || !pass) {
+          setStatus("手机 API 地址、用户名、密码都要填。", "bad");
+          return;
+        }
+
+        setStatus("正在注册，请等一下...");
+        const token = btoa(`${user}:${pass}`);
+        try {
+          const webhookBody = { ...registerInfo.webhookBody };
+          if (deviceId) webhookBody.device_id = deviceId;
+          const response = await fetch(`${phoneApi}/webhooks`, {
+            method: "POST",
+            mode: "cors",
+            headers: {
+              Authorization: `Basic ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(webhookBody),
+          });
+          const text = await response.text();
+          if (!response.ok) {
+            setStatus(`注册失败：HTTP ${response.status}\n${text}`, "bad");
+            return;
+          }
+          setStatus(`注册成功。\n${text || "可以给手机发短信测试了。"}`, "ok");
+        } catch (error) {
+          setStatus(
+            `浏览器没能访问手机本地服务器：${error.message}\n\n` +
+              "处理办法：\n" +
+              "1. 确认 App 首页本地服务器是在线。\n" +
+              "2. 手机 API 地址试试 http://localhost:8080。\n" +
+              "3. 用系统浏览器或 Chrome 打开本页，不要用微信内置浏览器。\n" +
+              "4. 私网 IP 按官方要求配置可信 HTTPS 证书。",
+            "bad",
+          );
+        }
+      }
+
+      els.registerBtn.addEventListener("click", registerWebhook);
+      loadRegisterInfo().catch((error) => setStatus(`读取服务器配置失败：${error.message}`, "bad"));
+    </script>
+  </body>
+</html>

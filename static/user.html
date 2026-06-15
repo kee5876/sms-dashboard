@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>验证码接收</title>
+    <link rel="stylesheet" href="static/user.css" />
+  </head>
+  <body>
+    <main class="user-shell">
+      <section class="summary-card">
+        <h1>
+          国家<span id="countryCode">+86</span> 号码：
+          <span id="phoneNumber">读取中</span>
+        </h1>
+        <p class="summary-meta">
+          接码次数：<span id="receiveLimit">-</span>
+          <span class="divider">|</span>
+          到期时间：<span id="expiresAt">-</span>
+        </p>
+        <button class="primary-action" id="copyNumberBtn" type="button">复制号码</button>
+      </section>
+
+      <section class="wait-card" aria-live="polite">
+        <div class="wait-line">
+          <span id="waitLabel">等待短信中...</span>
+          <strong id="waitTimer">00:00</strong>
+        </div>
+      </section>
+
+      <section class="record-card">
+        <header class="section-head">
+          <span class="section-mark">☰</span>
+          <h2>短信记录</h2>
+        </header>
+        <div class="record-list" id="recordList"></div>
+      </section>
+
+      <section class="help-card">
+        <header class="section-head">
+          <span class="section-mark">i</span>
+          <h2>使用说明</h2>
+        </header>
+        <ol id="instructions">
+          <li>复制手机号，打开腾讯视频APP。</li>
+          <li>粘贴手机号获取验证码。</li>
+          <li>不要更换设备，支持手机、平板、电脑登录。</li>
+        </ol>
+      </section>
+    </main>
+
+    <template id="recordTemplate">
+      <article class="record-row">
+        <div class="record-main">
+          <strong class="code"></strong>
+          <time class="time"></time>
+        </div>
+        <button class="copy-code" type="button">复制验证码</button>
+      </article>
+    </template>
+
+    <script src="static/user.js"></script>
+  </body>
+</html>
