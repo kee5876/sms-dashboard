@@ -17,7 +17,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/你的用户名/sms-dashboard.git
+git clone https://github.com/kee5876/sms-dashboard.git
 cd sms-dashboard
 
 # 2. 创建配置文件
