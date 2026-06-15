@@ -172,7 +172,7 @@ git commit -m "initial commit"
 
 # 4. 创建 GitHub 仓库
 # 5. 添加远程仓库并推送
-git remote add origin https://github.com/你的用户名/sms-dashboard.git
+git remote add origin https://github.com/kee5876/sms-dashboard.git
 git branch -M main
 git push -u origin main
 ```
