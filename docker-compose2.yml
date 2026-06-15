@@ -1,0 +1,97 @@
+# ==========================================
+# 1. 定义应用服务 (Services)
+# ==========================================
+services:
+  # --- 短信面板应用服务 ---
+  sms-dashboard:
+    build: .                                  # 使用当前目录下的 Dockerfile 构建镜像
+    container_name: sms-dashboard             # 指定容器的名称，方便后续管理
+    restart: unless-stopped                   # 容器异常退出时自动重启，手动停止则不重启
+    env_file:
+      - path: .env                            # 从 .env 文件中加载环境变量
+        required: false                       # 即使 .env 文件不存在也不报错（但下方有强制校验）
+    environment:
+      # 数据库后端类型，默认使用 mysql
+      DB_BACKEND: ${DB_BACKEND:-mysql}
+      # 面板监听地址，0.0.0.0 表示允许外部访问
+      DASHBOARD_HOST: 0.0.0.0
+      # 强制要求：面板的登录密码
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD in .env}
+      # 强制要求：Webhook 访问令牌
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:?Set WEBHOOK_TOKEN in .env}
+      # 强制要求：Webhook 签名密钥
+      WEBHOOK_SIGNING_KEY: ${WEBHOOK_SIGNING_KEY:?Set WEBHOOK_SIGNING_KEY in .env}
+      # 强制要求：应用对外暴露的公共访问地址
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set PUBLIC_BASE_URL in .env}
+      # 数据库连接配置，默认值分别为 mysql、3306、sms_dashboard
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-sms_dashboard}
+      MYSQL_USER: ${MYSQL_USER:-sms_dashboard}
+      # 强制要求：数据库用户密码
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+    ports:
+      # 端口映射：默认绑定本机 127.0.0.1，外部端口默认 8787，容器内部端口 8787
+      - "${BIND_ADDRESS:-127.0.0.1}:${PUBLIC_PORT:-8787}:8787"
+    volumes:
+      # 将本地的 ./data 目录挂载到容器的 /app/data，用于持久化应用数据
+      - ./data:/app/data
+    depends_on:
+      # 依赖关系：必须等待 mysql 服务健康检查通过后，此服务才会启动
+      mysql:
+        condition: service_healthy
+    networks:
+      - sms-dashboard-net                     # 加入自定义网络
+    # 安全加固：禁止容器内进程获取新的特权
+    security_opt:
+      - no-new-privileges:true
+    # 安全加固：丢弃所有 Linux 特权能力，极大降低安全风险
+    cap_drop:
+      - ALL
+
+  # --- MySQL 数据库服务 ---
+  mysql:
+    image: mysql:8.4                          # 使用 MySQL 8.4 官方镜像
+    container_name: sms-dashboard-mysql       # 指定数据库容器名称
+    restart: unless-stopped                   # 异常退出时自动重启
+    environment:
+      # 强制要求：MySQL root 用户的超级密码
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      # 自动创建的默认数据库和用户配置
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-sms_dashboard}
+      MYSQL_USER: ${MYSQL_USER:-sms_dashboard}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      # 设置容器时区为上海时间，避免日志或记录时间偏差
+      TZ: Asia/Shanghai
+    command:
+      # 自定义启动命令：设置字符集为 utf8mb4，支持存储 Emoji 表情符号
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      # 使用命名卷持久化数据库文件，防止容器删除导致数据丢失
+      - mysql-data:/var/lib/mysql
+      # 挂载初始化 SQL 脚本（只读），容器首次启动时会自动执行建表操作
+      - ./schema/mysql.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      # 健康检查：通过 mysqladmin ping 命令检测数据库是否正常运行
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s                           # 每 10 秒检查一次
+      timeout: 5s                             # 检查超时时间为 5 秒
+      retries: 10                             # 连续失败 10 次才判定为不健康
+      start_period: 30s                       # 容器启动后预留 30 秒初始化时间，期间不计入失败
+    networks:
+      - sms-dashboard-net                     # 加入自定义网络，与 sms-dashboard 互通
+
+# ==========================================
+# 2. 定义网络 (Networks)
+# ==========================================
+networks:
+  sms-dashboard-net:
+    name: sms-dashboard-net                   # 显式指定网络名称
+    driver: bridge                            # 使用桥接网络模式
+
+# ==========================================
+# 3. 定义数据卷 (Volumes)
+# ==========================================
+volumes:
+  mysql-data:                                 # 声明命名卷，交由 Docker 自动管理存储位置
